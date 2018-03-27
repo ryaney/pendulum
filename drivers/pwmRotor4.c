@@ -83,8 +83,8 @@ initialize(void)
 
 	/* TIM2 PWM1 PA0 */	/* TIM2 PWM2 PA1 */	/* TIM2 PWM3 PA2 */	/* TIM2 PWM4 PA3 */
 	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
-  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_PP;		//复用为PWM输出
-  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+  	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_PP;		//复用为PWM输出
+  	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 	TIM_DeInit(TIM2);
