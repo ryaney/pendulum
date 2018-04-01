@@ -1,8 +1,4 @@
-#include "MPU6050.h"
-#include "sys.h"
-# include"stdio.h"
-#include "delay.h"
-#include "timer.h"
+#include "mpu6050.h"
 extern float Angle;
 
 void Dianji_PID(float qiwang);

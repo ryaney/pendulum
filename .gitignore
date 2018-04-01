@@ -5,3 +5,15 @@ pendulum.uvgui_Shilla.bak
 pendulum.uvopt
 pendulum_uvopt.bak
 pendulum_uvproj.bak
+*.o
+*.d
+*.crf
+*.iex
+*.htm
+*.lnp
+*.map
+*.sct
+*.axf
+*.dep
+*.lst
+JLinkLog.txt

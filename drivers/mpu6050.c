@@ -6,28 +6,28 @@ void delay_IIC( int ms );
 
 void MPU6050_Inital(void)
 {
-	delay_IIC( 100 );
-	//解除休眠
-	Single_Write_IIC( SLAVEADRESS , PWR_MGMT_1 , 0x00 );
-	Single_Write_IIC( SLAVEADRESS , SMPLRT_DIV , 0x07 );
-	Single_Write_IIC( SLAVEADRESS , CONFIG , 0x07 );
-	Single_Write_IIC( SLAVEADRESS , GYRO_CONFIG , 0x18 );
-	Single_Write_IIC( SLAVEADRESS , ACCEL_CONFIG , 0x01 );
-	delay_IIC( 100 );
+    delay_IIC( 100 );
+    //解除休眠
+    Single_Write_IIC( SLAVEADRESS , PWR_MGMT_1 , 0x00 );
+    Single_Write_IIC( SLAVEADRESS , SMPLRT_DIV , 0x07 );
+    Single_Write_IIC( SLAVEADRESS , CONFIG , 0x07 );
+    Single_Write_IIC( SLAVEADRESS , GYRO_CONFIG , 0x18 );
+    Single_Write_IIC( SLAVEADRESS , ACCEL_CONFIG , 0x01 );
+    delay_IIC( 100 );
 }
 
 
 short getAccX(void)
 {
-	short AccX = 0;				//short(16位)
-	u8 AccXH = 0 , AccXL = 0;	//u8(unsigned char)
+    short AccX = 0; //short(16位)
+    u8 AccXH = 0 , AccXL = 0;   //u8(unsigned char)
 
-	AccXH = Single_Read_IIC( SLAVEADRESS , ACCEL_XOUT_H );
-	AccXL = Single_Read_IIC( SLAVEADRESS , ACCEL_XOUT_L );
+    AccXH = Single_Read_IIC( SLAVEADRESS , ACCEL_XOUT_H );
+    AccXL = Single_Read_IIC( SLAVEADRESS , ACCEL_XOUT_L );
 
-	AccX = (AccXH<<8)|AccXL;
+    AccX = (AccXH<<8)|AccXL;
 
-	return AccX;
+    return AccX;
 }
 
 short getAccY(void)

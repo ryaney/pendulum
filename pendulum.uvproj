@@ -356,13 +356,13 @@
             <wLevel>0</wLevel>
             <uThumb>0</uThumb>
             <uSurpInc>0</uSurpInc>
-            <uC99>0</uC99>
+            <uC99>1</uC99>
             <useXO>0</useXO>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_STDPERIPH_DRIVER</Define>
+              <Define>USE_STDPERIPH_DRIVER, STM32F10X_HD</Define>
               <Undefine></Undefine>
-              <IncludePath>.\STM32Libraries\Libraries\STM32F10x_StdPeriph_Driver\inc;.\drivers;.\STM32Libraries\Libraries\CMSIS\CM3;.\STM32Libraries\Libraries\STM32F10x_StdPeriph_Driver\src</IncludePath>
+              <IncludePath>.\STM32Libraries\Libraries\STM32F10x_StdPeriph_Driver\inc;.\drivers;.\STM32Libraries\Libraries\CMSIS\CM3;.\STM32Libraries\Libraries\STM32F10x_StdPeriph_Driver\src;.\app;.\app\pid</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -410,6 +410,16 @@
               <FileType>1</FileType>
               <FilePath>.\app\main.c</FilePath>
             </File>
+            <File>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\app\pid\pid.c</FilePath>
+            </File>
+            <File>
+              <FileName>kalman.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\app\pid\kalman.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -421,14 +431,19 @@
               <FilePath>.\drivers\pwmRotor4.c</FilePath>
             </File>
             <File>
-              <FileName>module_mpu6050.c</FileName>
+              <FileName>key.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\drivers\module_mpu6050.c</FilePath>
+              <FilePath>.\drivers\key.c</FilePath>
             </File>
             <File>
               <FileName>i2c.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\drivers\i2c.c</FilePath>
+            </File>
+            <File>
+              <FileName>mpu6050.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\drivers\mpu6050.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -554,6 +569,16 @@
               <FileName>system_stm32f10x.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\STM32Libraries\Libraries\STM32F10x_StdPeriph_Driver\src\system_stm32f10x.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>startup</GroupName>
+          <Files>
+            <File>
+              <FileName>startup_stm32f10x_hd.s</FileName>
+              <FileType>2</FileType>
+              <FilePath>.\startup\startup_stm32f10x_hd.s</FilePath>
             </File>
           </Files>
         </Group>

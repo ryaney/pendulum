@@ -43,17 +43,17 @@ static int PWM_Motor_Max = 1050-1;   // 默认周期 = 1ms, 21MHz分频到20kHz，这里定
 //在使用高频的情况下（基准频率21M） 可设置的最低频率低于340Hz
 
 PWMROTOR4_T pwmRotor4 = {
-	.initialize = initialize,
-	.frequency = frequency,
-	.setFreq = setFreq,
-	.setMotor1F = setMotor1F,
-	.setMotor2F = setMotor2F,
-	.setMotor3F = setMotor3F,
-	.setMotor4F = setMotor4F,
-	.setMotor1I = setMotor1I,
-	.setMotor2I = setMotor2I,
-	.setMotor3I = setMotor3I,
-	.setMotor4I = setMotor4I
+    .initialize = initialize,
+    .frequency = frequency,
+    .setFreq = setFreq,
+    .setMotor1F = setMotor1F,
+    .setMotor2F = setMotor2F,
+    .setMotor3F = setMotor3F,
+    .setMotor4F = setMotor4F,
+    .setMotor1I = setMotor1I,
+    .setMotor2I = setMotor2I,
+    .setMotor3I = setMotor3I,
+    .setMotor4I = setMotor4I
 };
 //----------------- Function -----------------------------//
 
