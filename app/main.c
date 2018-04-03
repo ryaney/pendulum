@@ -3,11 +3,13 @@
 #include "mpu6050.h"
 #include "pwmRotor4.h"
 #include "i2c.h"
+#include "pid.h"
 
 /***************È«¾Ö±äÁ¿Çø****************/ 
 extern float anx,any;
 extern float Ki, Kp, Kd;    //PID²ÎÊý
 extern float Angle, angle_dot,  output_date;    //mp6050Êý¾Ý
+static float target = 10;
 /*****************************************/
 int main(void)
 {
@@ -21,8 +23,8 @@ int main(void)
     Key_GPIO_Config();
     
     /* I2C、MPU6050初始化 */
-    IIC_GPIO_Configuration( IIC_GOIO_SDA , IIC_SDA , IIC_GPIO_SCL , IIC_SCL );
-    MPU6050_Inital();
+    I2C_Config();
+    imu_sensor.initialize();
 
     /* PWM初始化 */
     pwmRotor4.initialize();
@@ -31,12 +33,12 @@ int main(void)
     {
         /* 
          * 每2ms采样一次
-         * 读MPU6050，得到
+         * 读MPU6050，得到三轴
+         * PID反馈控制
          */
-        // delay_ms(2);
-        getAccX();
-        getAccY();
-        getAccZ();
-        //printf("x:%d,y:%d,z:%d\n", x, y, z);
+        imu_sensor.read_imu();
+        imu_sensor.angle_cal();
+        pid(target);
+//        delay_ms(100);
     }
 }

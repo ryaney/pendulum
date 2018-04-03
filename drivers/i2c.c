@@ -1,260 +1,293 @@
+#include "stm32f10x_i2c.h"
 #include "stm32f10x.h"
+#include "stm32f10x_dma.h"
 #include "i2c.h"
 
-
-/************************************************************/
-/*模拟IIC引脚初始化函数*/
-/************************************************************/
-void IIC_GPIO_Configuration( GPIO_TypeDef * GPIOx_SDA , uint16_t SDA_Pin , GPIO_TypeDef * GPIOx_SCL , uint16_t SCL_Pin )
+/*=====================================================================================================*/
+/*=====================================================================================================*/
+vu8* I2C_ReadPtr;
+vu8* I2C_WritePtr;
+unsigned int I2C_TimeCnt = I2C_TIME;
+/*=====================================================================================================*/
+/*=====================================================================================================*/
+DMA_InitTypeDef DMA_InitStruct;
+/*=====================================================================================================*/
+/*=====================================================================================================*
+**ㄧ计 : I2C_Config
+** : I2C 砞﹚ & 皌竚
+**块 : None
+**块 : None
+**ㄏノ : I2C_Config();
+**=====================================================================================================*/
+/*=====================================================================================================*/
+void I2C_Config( void )
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-	uint32_t RCC_GPIOx_SDA = 0;
-	uint32_t RCC_GPIOx_SCL = 0;
+    GPIO_InitTypeDef GPIO_InitStruct;
+    NVIC_InitTypeDef NVIC_InitStruct;
+    I2C_InitTypeDef I2C_InitStruct;
 
-	//得到滤波后的引脚端口
-	RCC_GPIOx_SDA = GPIO_Filter( GPIOx_SDA );
-	RCC_GPIOx_SCL = GPIO_Filter( GPIOx_SCL );
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,ENABLE);
+    /* Enable DMA1 clock */
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);  //使能peripheral clocks
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+
+    //config afio 重定义I2C1 io口到PB8和PB9
+    GPIO_PinRemapConfig(GPIO_Remap_I2C1,ENABLE);
+
+    //config gpio PB
+    GPIO_InitStruct.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9; //使能PB9：SDA//使能PB8：SCL
+    GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStruct);
+    GPIO_SetBits(GPIOB,GPIO_Pin_8 | GPIO_Pin_9);
+    GPIO_InitStruct.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9; //使能PB9：SDA//使能PB8：SCL
+    GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_OD;    //i2c输出需要上拉
+    GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    NVIC_InitStruct.NVIC_IRQChannel = DMA1_Channel7_IRQn;
+    NVIC_InitStruct.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStruct.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStruct);
+
+    DMA_ClearFlag(DMA1_FLAG_GL7);
+    DMA_Cmd(DMA1_Channel7, DISABLE);
+    DMA_DeInit(DMA1_Channel7);
+    DMA_InitStruct.DMA_PeripheralBaseAddr = (u32)I2C1_DR_Address;
+    DMA_InitStruct.DMA_MemoryBaseAddr = (u32)0;
+    DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_InitStruct.DMA_BufferSize = 20;
+    DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_InitStruct.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_InitStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+    DMA_InitStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+    DMA_InitStruct.DMA_Mode = DMA_Mode_Normal;
+    DMA_InitStruct.DMA_Priority = DMA_Priority_VeryHigh;
+    DMA_InitStruct.DMA_Priority = DMA_M2M_Disable;
+    DMA_Init(DMA1_Channel7, &DMA_InitStruct);
+    DMA_ITConfig(DMA1_Channel7, DMA_IT_TC, ENABLE);		//开启DMA中断
+
+    I2C_Cmd(I2C1, DISABLE);
+    I2C_DeInit(I2C1);	
+    I2C_InitStruct.I2C_Mode = I2C_Mode_I2C;
+    I2C_InitStruct.I2C_DutyCycle = I2C_DutyCycle_2;
+    I2C_InitStruct.I2C_OwnAddress1 = 0x00;
+    I2C_InitStruct.I2C_Ack = I2C_Ack_Enable;
+    I2C_InitStruct.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
+    I2C_InitStruct.I2C_ClockSpeed = I2C1_SPEED;
+    I2C_Init(I2C1, &I2C_InitStruct);
+    I2C_Cmd(I2C1, ENABLE);
+    I2C_DMACmd(I2C1, ENABLE);
+}
+/*=====================================================================================================*/
+/*=====================================================================================================*
+函数：I2C_DMA_Read(ReadBuf, SlaveAddr, ReadAddr, (u8*)(&NumByte));
+描述：从I2C ReadAddr地址处读入NumByte个数据，数据在ReadBuf中
+参数：*ReadBuf, SlaveAddr, ReadAddr, *NumByte
+返回：成功：SUCCESS	失败：超时时间
+**=====================================================================================================*/
+/*=====================================================================================================*/
+u32 I2C_DMA_Read( u8* ReadBuf, u8 SlaveAddr, u8 ReadAddr, u8* NumByte )
+{
+	I2C_ReadPtr = NumByte;
+
+	I2C_TimeCnt = I2C_TIME;
+	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY))
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
+
+	I2C_GenerateSTART(I2C1, ENABLE);
+
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT))		//检查EV5状态并清除
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 	
-	//使能时钟
-    RCC_APB2PeriphClockCmd(RCC_GPIOx_SDA,ENABLE);
-	RCC_APB2PeriphClockCmd(RCC_GPIOx_SCL,ENABLE);
+	I2C_Send7bitAddress(I2C1, SlaveAddr, I2C_Direction_Transmitter);
 
-	//配置引脚
-	GPIO_InitStructure.GPIO_Pin = SDA_Pin;
-	GPIO_InitStructure.GPIO_Speed=GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode=GPIO_Mode_Out_OD;
-	GPIO_Init(GPIOx_SDA, &GPIO_InitStructure);
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED))		//检查EV6状态并清除
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 
-	GPIO_InitStructure.GPIO_Pin = SCL_Pin;
-	GPIO_InitStructure.GPIO_Speed=GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode=GPIO_Mode_Out_OD;
-	GPIO_Init(GPIOx_SCL, &GPIO_InitStructure);
+	I2C_SendData(I2C1, ReadAddr);
 
-	//初始化ICC的模式
-	SET_SDA;
-	SET_SCL;  
-}
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED))				//检查EV8状态并清除
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 
+	I2C_GenerateSTART(I2C1, ENABLE);
+	
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT))					//检查EV5状态并清除
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 
-/************************************************************/
-/************************************************************/
-void IIC_Delay(void)
-{
-	u32 i = 5;
-	while( i-- );
-}
+	I2C_Send7bitAddress(I2C1, SlaveAddr, I2C_Direction_Receiver);
 
-/*******************************************************************
-TWI_START
-发送启动数据
-*******************************************************************/
-u8 IIC_Start(void)
-{
-	SET_SDA;
-	IIC_DELAY;
-
-	SET_SCL;
-	IIC_DELAY;
-
-	if( IIC_SDA_STATE == RESET )
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED))			//检查EV6状态并清除
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
+	
+	if((u16)(*NumByte) == 1)
 	{
-		return IIC_BUS_BUSY;
+		I2C_AcknowledgeConfig(I2C1, DISABLE);
+		(void)I2C1->SR2;
+		
+		I2C_GenerateSTOP(I2C1, ENABLE);
+
+		I2C_TimeCnt = I2C_TIME;
+		while(I2C_GetFlagStatus(I2C1, I2C_FLAG_RXNE) == RESET)
+			if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
+
+		*ReadBuf = I2C_ReceiveData(I2C1);
+		(u16)(*NumByte)--;
+
+		I2C_TimeCnt = I2C_TIME;
+		while(I2C1->CR1 & I2C_CR1_STOP)
+			if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
+
+		I2C_AcknowledgeConfig(I2C1, ENABLE);
 	}
+	else {
+		DMA_ClearFlag(DMA1_FLAG_GL7);
+		DMA_InitStruct.DMA_MemoryBaseAddr = (u32)ReadBuf;
+		DMA_InitStruct.DMA_BufferSize = (u32)(*NumByte);
+		DMA_Init(DMA1_Channel7, &DMA_InitStruct);
+		I2C_DMALastTransferCmd(I2C1, ENABLE);
+		DMA_Cmd(DMA1_Channel7, ENABLE);
+	}
+	//I2C结束在DMA中断服务中
+	I2C_TimeCnt = I2C_TIME;
+	while(*NumByte > 0)
+		if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 
-	RESET_SDA;
-	IIC_DELAY;
+	return SUCCESS;
+}
+/*=====================================================================================================*/
+/*=====================================================================================================*
+函数2C_DMA_Read(ReadBuf, SlaveAddr, ReadAddr, NumByte);
+描述：从I2C ReadAddr地址处读入NumByte个数据，数据在ReadBuf中
+参数：*ReadBuf, SlaveAddr, ReadAddr, *NumByte
+返回：成功：SUCCESS	失败：超时时间
+**=====================================================================================================*/
+/*=====================================================================================================*/
+u32 I2C_DMA_ReadReg( u8 SlaveAddr, u8 ReadAddr, u8* ReadBuf, u8 NumByte )
+{
+	I2C_DMA_Read(ReadBuf, SlaveAddr, ReadAddr, (u8*)(&NumByte));
+	return SUCCESS;
+}
+/*=====================================================================================================*/
+/*=====================================================================================================*
+函数：I2C_DMA_Write( u8* WriteBuf, u8 SlaveAddr, u8 WriteAddr, u8* NumByte )
+描述：向I2C ReadAddr地址处写入1个数据，数据在WriteBuf中
+参数：*WriteBuf, SlaveAddr, ReadAddr, *NumByte
+返回：成功：SUCCESS	失败：超时时间
+**=====================================================================================================*/
+/*=====================================================================================================*/
+u32 I2C_DMA_Write( u8* WriteBuf, u8 SlaveAddr, u8 WriteAddr, u8* NumByte )
+{
+	I2C_WritePtr = NumByte;
 
-	RESET_SCL;
-	IIC_DELAY;
+	I2C_TimeCnt = I2C_TIME;
+	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY))
+		if((I2C_TimeCnt--) == 0) 
+			return I2C_TimeOut();
 
-	if( IIC_SDA_STATE == SET )
+	I2C_GenerateSTART(I2C1, ENABLE);
+
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT))
+		if((I2C_TimeCnt--) == 0) 
+			return I2C_TimeOut();
+
+	I2C_TimeCnt = I2C_TIME;
+	I2C_Send7bitAddress(I2C1, SlaveAddr, I2C_Direction_Transmitter);
+
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED))
+		if((I2C_TimeCnt--) == 0)
+			return I2C_TimeOut();
+
+	I2C_SendData(I2C1, WriteAddr);
+	I2C_TimeCnt = I2C_TIME;
+	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED))					//检查EV8状态并清除
+		if((I2C_TimeCnt--) == 0) 
+			return I2C_TimeOut();
+
+	u8* ptr = WriteBuf;
+	while((u16)(*I2C_WritePtr)--)
 	{
-		return IIC_BUS_ERROR;
+		I2C_SendData(I2C1, *ptr);
+		ptr++;
+		I2C_TimeCnt = I2C_TIME;
+		while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED))					//检查EV8状态并清除
+			if((I2C_TimeCnt--) == 0)	return I2C_TimeOut();
 	}
-
-	return IIC_BUS_READY;
+	I2C_GenerateSTOP(I2C1, ENABLE);
+	return SUCCESS;
 }
-
-/*******************************************************************
-TWI_STOP
-发送停止数据
-*******************************************************************/
-void IIC_Stop(void)
+/*=====================================================================================================*/
+/*=====================================================================================================*
+函数：I2C_DMA_Write( u8* WriteBuf, u8 SlaveAddr, u8 WriteAddr, u8* NumByte )
+描述：向I2C ReadAddr地址处写入1个数据，数据在WriteBuf中
+参数：*WriteBuf, SlaveAddr, ReadAddr, *NumByte
+返回：成功：SUCCESS	失败：超时时间
+**=====================================================================================================*/
+/*=====================================================================================================*/
+u32 I2C_DMA_WriteReg( u8 SlaveAddr, u8 WriteAddr, u8* WriteBuf, u8 NumByte )
 {
-	RESET_SDA;
-	IIC_DELAY;
+    I2C_DMA_Write(WriteBuf, SlaveAddr, WriteAddr, (u8*)(&NumByte));
 
-	SET_SCL;
-	IIC_DELAY;
-
-	SET_SDA;
-	IIC_DELAY;
+    return SUCCESS;
 }
 
-/*******************************************************************************
-* 函数名称:TWI_SendNACK                                                                     
-* 描    述:收到数据,发送NACK                                                                                                                                       
- *******************************************************************************/
-void IIC_SendNACK(void)
+/*=====================================================================================================*/
+/*=====================================================================================================*/
+void DMA1_Channel7_IRQHandler( void )
 {
-	RESET_SDA;
-	IIC_DELAY;
-	SET_SCL;
-	IIC_DELAY;
-	RESET_SCL; 
-	IIC_DELAY; 
+    I2C1_Recv_DMA_IRQ();
 }
 
-/*******************************************************************************
-* 函数名称:TWI_SendACK                                                                     
-* 描    述:收到数据,发送ACK                                                                                                                                        
-*******************************************************************************/
-void IIC_SendACK(void)
+/*=====================================================================================================*/
+/*=====================================================================================================*
+**ㄧ计 : I2C1_Recv_DMA_IRQ
+** : I2C1 Recv DMA IRQ
+**块 : None
+**块 : None
+**ㄏノ : I2C1_Recv_DMA_IRQ();
+**=====================================================================================================*/
+/*=====================================================================================================*/
+void I2C1_Recv_DMA_IRQ( void )
 {
-	SET_SDA;
-	IIC_DELAY;
-	SET_SCL;
-	IIC_DELAY;
-	RESET_SCL; 
-	IIC_DELAY;
+    if(DMA_GetFlagStatus(DMA1_FLAG_TC7) != RESET) {
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        DMA_Cmd(DMA1_Channel7, DISABLE);
+        DMA_ClearFlag(DMA1_FLAG_TC7);
+        *I2C_ReadPtr = 0;
+    }
 }
 
-/*******************************************************************************
- * 函数名称:TWI_SendByte                                                                     
- * 描    述:发送一个字节                                                                                                                                      
- *******************************************************************************/
-u8 IIC_SendByte(u8 Data)
-{
-	 u8 i;
-	 RESET_SCL;
-	 for(i=0;i<8;i++)
-	 {  
-		//---------数据建立----------
-		if(Data&0x80)
-		{
-			SET_SDA;
-		}
-		else
-		{
-			RESET_SDA;
-		} 
-		Data<<=1;
-		IIC_DELAY;
-		//---数据建立保持一定延时----
-		//----产生一个上升沿[正脉冲] 
-		SET_SCL;
-		IIC_DELAY;
-		RESET_SCL;
-		IIC_DELAY;//延时,防止SCL还没变成低时改变SDA,从而产生START/STOP信号
-		//---------------------------   
-	 }
-	 //接收从机的应答 
-	 SET_SDA; 
-	 IIC_DELAY;
-	 SET_SCL;
-	 IIC_DELAY;   
-	 if(IIC_SDA_STATE)
-	 {
-		RESET_SCL;
-		return IIC_NACK;
-	 }
-	 else
-	 {
-		RESET_SCL;
-		return IIC_ACK;  
-	 }    
-}
-
-/*******************************************************************************
- * 函数名称:TWI_ReceiveByte                                                                     
- * 描    述:接收一个字节                                                                                                                                       
- *******************************************************************************/
-u8 IIC_RecvByte(void)
-{
-	 u8 i,Dat = 0;
-	 SET_SDA;
-	 RESET_SCL; 
-	 Dat=0;
-	 for(i=0;i<8;i++)
-	 {
-		SET_SCL;//产生时钟上升沿[正脉冲],让从机准备好数据 
-		IIC_DELAY; 
-		Dat<<=1;
-		if(IIC_SDA_STATE) //读引脚状态
-		{
-			Dat|=0x01; 
-		}   
-		RESET_SCL;//准备好再次接收数据  
-		IIC_DELAY;//等待数据准备好         
-	 }
-	 return Dat;
-}
-
-/******单字节写入*******************************************/
-void Single_Write_IIC(u8 SlaveAddress,u8 REG_Address,u8 REG_data)
-{
-    IIC_Start();                  //起始信号
-    IIC_SendByte(SlaveAddress);   //发送设备地址+写信号
-    IIC_SendByte(REG_Address);    //内部寄存器地址， //请参考中文pdf22页 
-    IIC_SendByte(REG_data);       //内部寄存器数据， //请参考中文pdf22页 
-    IIC_Stop();                   //发送停止信号
-}
-
-/********单字节读取*****************************************/
-u8 Single_Read_IIC(u8 SlaveAddress, u8 REG_Address)
+void delay_us(u32 time)  
 {  
-	u8 REG_data;
-    IIC_Start();                          //起始信号
-    IIC_SendByte(SlaveAddress);           //发送设备地址+写信号
-    IIC_SendByte(REG_Address);            //发送存储单元地址，//从0开始	
-    IIC_Start();                          //起始信号
-    IIC_SendByte(SlaveAddress+1);         //发送设备地址+读信号
-    REG_data = IIC_RecvByte();              //读出寄存器数据
-	IIC_SendACK();   
-	IIC_Stop();                           //停止信号
-    return REG_data; 
+  u32 i=8*time;  
+  while(i--);  
 }
 
-/*******************************************************************
-引脚端口过滤器 返回值为 引脚端口的时钟编号
-*******************************************************************/
-uint16_t GPIO_Filter( GPIO_TypeDef * GPIOx )
-{	 
-	uint32_t RCC_GPIOx = 0; 
-
-	if( GPIOx == GPIOA )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOA;
-	}
-	else if( GPIOx == GPIOA )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOA;
-	}
-	else if( GPIOx == GPIOB )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOB;
-	}
-	else if( GPIOx == GPIOC )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOC;
-	}
-	else if( GPIOx == GPIOD )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOD;
-	}
-	else if( GPIOx == GPIOE )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOE;
-	}
-	else if( GPIOx == GPIOF )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOF;
-	}
-	else if( GPIOx == GPIOG )
-	{
-		RCC_GPIOx = RCC_APB2Periph_GPIOG;
-	}
-
-	return RCC_GPIOx;
+void delay_ms(u32 nTimer)  
+{  
+    u32 i=1000*nTimer;  
+    delay_us(i);  
 }
 
+/*=====================================================================================================*/
+/*=====================================================================================================*
+**ㄧ计 : I2C_TimeOut
+** : I2C TimeOut
+**块 : None
+**块 : None
+**ㄏノ : I2C_TimeOut();
+**=====================================================================================================*/
+/*=====================================================================================================*/
+u32 I2C_TimeOut( void )
+{
+    delay_ms(200);
+    return ERROR;
+}
