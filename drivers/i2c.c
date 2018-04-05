@@ -273,7 +273,7 @@ void delay_us(u32 time)
 
 void delay_ms(u32 nTimer)  
 {  
-    u32 i=1000*nTimer;  
+    u32 i=500*nTimer;  
     delay_us(i);  
 }
 

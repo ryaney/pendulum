@@ -1,344 +1,223 @@
-/*
- * File						: pwmRotor4.c
- * Description		: This file is ...
- * Author					: lynx@sia  84693469@qq.com
- * Copyright			:
- *
- * History
- **--------------------
- * Rev						: 0.00
- * Date						: 10/19/2013
- *
- * create.
- *
- * Rev						: 0.00
- * Date						: 11/11/2013
- *
- * Exchanged the motor 3 and 4.
- **--------------------
- */
-
-//----------------- Include files ------------------------//
-#include "stm32f10x_gpio.h"
+#include <stdio.h>
+#include <stm32f10x.h>
 #include "pwmRotor4.h"
-//----------------- Define -------------------------------//
 
-//----------------- Function Prototype -------------------//
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:é…ç½®TIM2å¤ç”¨è¾“å‡ºPWMæ—¶ç”¨åˆ°çš„I/O
+ å‡½æ•°è¯´æ˜:PA0 - TIM2_CH1 - M4_PWM
+	   	  PA1 - TIM2_CH2 - M1_PWM
+	   	  PA2 - TIM2_CH3 - M2_PWM
+		  PA3 - TIM2_CH4 - M3_PWM
+		  
+		  - M1_DIR  -> PD14
+ 		  - M1_STOP -> PD12
 
-static int initialize(void);
-static int frequency(int freq, float percentage);
-static int setFreq(int freq);
-static int setMotor1F(float percentage);
-static int setMotor2F(float percentage);
-static int setMotor3F(float percentage);
-static int setMotor4F(float percentage);
-static int setMotor1I(int percentage);
-static int setMotor2I(int percentage);
-static int setMotor3I(int percentage);
-static int setMotor4I(int percentage);
-//----------------- Variable -----------------------------//
-
-static int PWM_Motor_Min = 0;
-static int PWM_Motor_Max = 1050-1;   // Ä¬ÈÏÖÜÆÚ = 1ms, 21MHz·ÖÆµµ½20kHz£¬ÕâÀï¶¨ÒåÔÚÍ·ÎÄ¼şµÄPWM_Motor_MaxÖĞ ¼õÒ»ÊÇ¾«×¼¶¨Ê±µÄĞèÒª ×¢Òâ ÕâÀïÊÇ³õÊ¼Öµ£¬Ëæºó¶à´Î¸ü¸ÄĞèÒªÖØĞÂÉèÖÃ
-//ÔÚÊ¹ÓÃ¸ßÆµµÄÇé¿öÏÂ£¨»ù×¼ÆµÂÊ21M£© ¿ÉÉèÖÃµÄ×îµÍÆµÂÊµÍÓÚ340Hz
-
-PWMROTOR4_T pwmRotor4 = {
-    .initialize = initialize,
-    .frequency = frequency,
-    .setFreq = setFreq,
-    .setMotor1F = setMotor1F,
-    .setMotor2F = setMotor2F,
-    .setMotor3F = setMotor3F,
-    .setMotor4F = setMotor4F,
-    .setMotor1I = setMotor1I,
-    .setMotor2I = setMotor2I,
-    .setMotor3I = setMotor3I,
-    .setMotor4I = setMotor4I
-};
-//----------------- Function -----------------------------//
-
-/*
- * Name						: initialize
- * Description		: This file is ...
- * Author					: lynx@sia  84693469@qq.com
- * Copyright			:
- *
- * History
- **--------------------
- * Rev						: 0.00
- * Date						: 10/19/2013
- *
- * create.
- **--------------------
- */
-static int
-initialize(void)
+		  - M2_DIR  -> PD15
+ 		  - M2_STOP -> PD13
+		  
+		  - M3_DIR  -> PD10
+ 		  - M3_STOP -> PD11
+		  
+		  - M4_DIR  -> PD8
+ 		  - M4_STOP -> PD9				
+------------------------------------------*/								   
+void PWM_GPIO_Config(void) 	  
 {
-	GPIO_InitTypeDef GPIO_InitStruct;
-	TIM_TimeBaseInitTypeDef TIM_TimeBaseStruct;
-	TIM_OCInitTypeDef TIM_OCInitStruct;
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
-
-	/* TIM2 PWM1 PA0 */	/* TIM2 PWM2 PA1 */	/* TIM2 PWM3 PA2 */	/* TIM2 PWM4 PA3 */
-	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
-  	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_PP;		//¸´ÓÃÎªPWMÊä³ö
-  	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	TIM_DeInit(TIM2);
-
-/************************** PWM Output **************************************/
-	/* ÔO¶¨ TIM2 TIM3 TIM4 Time Base */
-	TIM_TimeBaseStruct.TIM_Period = (u16)(PWM_Motor_Max);     // ßLÆÚ = 1ms, 20kHz£¬ÕâÀï¶¨ÒåÔÚÍ·ÎÄ¼şµÄPWM_Motor_MaxÖĞ °üÀ¨¼õÒ»
-	TIM_TimeBaseStruct.TIM_Prescaler = (u16)(4-1);             // ³ıîl4 = 21MHz
-	TIM_TimeBaseStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-	TIM_TimeBaseStruct.TIM_CounterMode = TIM_CounterMode_Up;		// ÉÏ”µ
-	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStruct);
-
-	/* ÔO¶¨ TIM2 TIM3 TIM4 TIM8 OC */
-	TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM1;							// ÅäÖÃé PWM1 Ä£Ê½
-	TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;	// ÖÂÄÜ OC
-	TIM_OCInitStruct.TIM_Pulse = PWM_Motor_Min;									// ÔOÖÃÌø×ƒÖµ
-	TIM_OCInitStruct.TIM_OCPolarity = TIM_OCPolarity_High;			// ®”Ó‹”µÖµĞ¡ì¶ PWM_Motor_Min •ré¸ßëŠÆ½
-	TIM_OC1Init(TIM2, &TIM_OCInitStruct);												// ³õÊ¼»¯ TIM2 OC1
-	TIM_OC2Init(TIM2, &TIM_OCInitStruct);												// ³õÊ¼»¯ TIM2 OC2
-	TIM_OC3Init(TIM2, &TIM_OCInitStruct);												// ³õÊ¼»¯ TIM2 OC3
-	TIM_OC4Init(TIM2, &TIM_OCInitStruct);												// ³õÊ¼»¯ TIM2 OC4
-	TIM_OC1PreloadConfig(TIM2, TIM_OCPreload_Enable);						// ÖÂÄÜ TIM2 OC1 îAÑbİd
-	TIM_OC2PreloadConfig(TIM2, TIM_OCPreload_Enable);						// ÖÂÄÜ TIM2 OC2 îAÑbİd
-	TIM_OC3PreloadConfig(TIM2, TIM_OCPreload_Enable);						// ÖÂÄÜ TIM2 OC3 îAÑbİd
-	TIM_OC4PreloadConfig(TIM2, TIM_OCPreload_Enable);						// ÖÂÄÜ TIM2 OC4 îAÑbİd
-	
-	//ÈÃµç»ú²»¶¯×÷
-	PWM1 = PWM_Motor_Min;
-	PWM2 = PWM_Motor_Min;
-	PWM3 = PWM_Motor_Min;
-	PWM4 = PWM_Motor_Min;
-
-	/* †¢„Ó */
-	TIM_ARRPreloadConfig(TIM2, ENABLE);													// ÖÂÄÜ TIM2 ÖØİd¼Ä´æÆ÷ARR
-	TIM_Cmd(TIM2, ENABLE);																			// ÖÂÄÜ TIM2
-
-	return 0;
+	 GPIO_InitTypeDef GPIO_InitStructure;		  
+	 
+	 RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,  ENABLE); 	
+	 RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); 
+	  
+	 GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
+	 GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;		    
+	 GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	 GPIO_Init(GPIOA, &GPIO_InitStructure);
 }
-/*
- * Name						: frequency
- * Description		: This file is ...
- * Author					: lynx@sia  84693469@qq.com
- * Copyright			:
- *
- * History 2012/11/3¸Ä³ÉÁËÓÃfloatµÄĞÎÊ½À´Ôö¼ÓÓÃ»§ÌåÑé
- **--------------------
- * Rev						: 0.00
- * Date						: 10/19/2013
- *
- * create.
- **--------------------
- */
-static int
-frequency(int freq, float percentage)
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:é…ç½®TIM2è¾“å‡ºçš„PWMä¿¡å·çš„æ¨¡å¼
+ å‡½æ•°è¯´æ˜:- TIM2é€šé“4è¾“å‡ºPWM
+ 		  - PWMæ¨¡å¼1
+ 		  - ææ€§ä½ç”µå¹³
+		  - PWMé¢‘ç‡ = 24kHz				
+------------------------------------------*/
+void PWM_Mode_Config(void)
 {
-	TIM_TimeBaseInitTypeDef TIM_TimeBaseStruct;
-	float Fpercentage;
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+	TIM_OCInitTypeDef TIM_OCInitStructure;
+		  
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE); 	
+
+	TIM_TimeBaseStructure.TIM_Prescaler =  0; 			        //æ—¶é’Ÿé¢„åˆ†é¢‘
+	TIM_TimeBaseStructure.TIM_CounterMode =  TIM_CounterMode_Up;//å‘ä¸Šè®¡æ•°
+	TIM_TimeBaseStructure.TIM_Period = 3000;				    //è‡ªåŠ¨é‡è£…å€¼
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;	    //æ—¶é’Ÿåˆ†é¢‘1
+	TIM_TimeBaseInit(TIM2,&TIM_TimeBaseStructure);
+
+	TIM_OCInitStructure.TIM_OCMode =  TIM_OCMode_PWM2;         
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable; 
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+	TIM_OCInitStructure.TIM_Pulse = 0;     
+	TIM_OC1Init(TIM2,&TIM_OCInitStructure);
 	
-	if (freq == 0 || percentage <= 0) {       //ÕâÀïÊÇµ÷ÊÔ¹ØµÆÓÃµÄ
-		//ÈÃµç»ú²»¶¯×÷
-		PWM1 = PWM_Motor_Min;
-		PWM2 = PWM_Motor_Min;
-		PWM3 = PWM_Motor_Min;
-		PWM4 = PWM_Motor_Min;
-		return 0;
-	} else {	
-		//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§
-		if(percentage > 100)
-			percentage = 100;
+	TIM_OCInitStructure.TIM_OCMode =  TIM_OCMode_PWM2;         
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable; 
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+	TIM_OCInitStructure.TIM_Pulse = 0;     
+	TIM_OC2Init(TIM2,&TIM_OCInitStructure);				        
 	
-		Fpercentage = percentage/100.0f;          //×ª»¯ÎªĞ¡Êı[0,1)
-		
-		PWM_Motor_Max = (21000000/freq-1); //ÉèÖÃ×Ô¶¯ÖØ×°ÔØµÄÖµ
-		/* ÔO¶¨ TIM2 TIM3 TIM4 Time Base */
-		TIM_TimeBaseStruct.TIM_Period = (u16)(PWM_Motor_Max);     // ÖØĞÂÉèÖÃÖÜÆÚ
-		TIM_TimeBaseStruct.TIM_Prescaler = (u16)(4-1);             // ³ıîl4 = 21M
-		TIM_TimeBaseStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-		TIM_TimeBaseStruct.TIM_CounterMode = TIM_CounterMode_Up;		// ÉÏ”µ
-		TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStruct);
-		
-		Fpercentage *= PWM_Motor_Max;
-		
-		PWM1 = Fpercentage;
-		PWM2 = Fpercentage;
-		PWM3 = Fpercentage;
-		PWM4 = Fpercentage;
-		
-		/* †¢„Ó */
-		TIM_ARRPreloadConfig(TIM2, ENABLE);													// ÖÂÄÜ TIM2 ÖØİd¼Ä´æÆ÷ARR
-		TIM_Cmd(TIM2, ENABLE);																			// ÖÂÄÜ TIM2
-		
-	}
+	TIM_OCInitStructure.TIM_OCMode =  TIM_OCMode_PWM2;           
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+	TIM_OCInitStructure.TIM_Pulse = 0;     
+	TIM_OC3Init(TIM2,&TIM_OCInitStructure);	
+	
+	TIM_OCInitStructure.TIM_OCMode =  TIM_OCMode_PWM2;           
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+	TIM_OCInitStructure.TIM_Pulse = 0;     
+	TIM_OC4Init(TIM2,&TIM_OCInitStructure);			         
+	
+	TIM_OC1PreloadConfig(TIM2,TIM_OCPreload_Enable); //ä½¿èƒ½TIM2åœ¨CCR2ä¸Šçš„é¢„è£…è½½å¯„å­˜å™¨
+	TIM_OC2PreloadConfig(TIM2,TIM_OCPreload_Enable); //ä½¿èƒ½TIM2åœ¨CCR2ä¸Šçš„é¢„è£…è½½å¯„å­˜å™¨
+	TIM_OC3PreloadConfig(TIM2,TIM_OCPreload_Enable); //ä½¿èƒ½TIM2åœ¨CCR3ä¸Šçš„é¢„è£…è½½å¯„å­˜å™¨
+	TIM_OC4PreloadConfig(TIM2,TIM_OCPreload_Enable); //ä½¿èƒ½TIM2åœ¨CCR4ä¸Šçš„é¢„è£…è½½å¯„å­˜å™¨
 
-	return 1;
+	TIM_SetCompare1(TIM2,0);
+	TIM_SetCompare2(TIM2,0);
+	TIM_SetCompare3(TIM2,0);
+	TIM_SetCompare4(TIM2,0);
+
+	TIM_Cmd(TIM2,ENABLE);	//ä½¿èƒ½TIM2
 }
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœºè¿åŠ¨æ–¹å‘ç®¡è„šé…ç½®
+ å‡½æ•°è¯´æ˜:- M1_DIR  -> PD14
+ 		  - M1_STOP -> PD12
 
-static int setFreq(int freq)
-{	
-	TIM_TimeBaseInitTypeDef TIM_TimeBaseStruct;
-	if (freq < 1) {       //ÕâÀïÊÇµ÷ÊÔ¹ØµÆÓÃµÄ
-		//ÈÃµç»ú²»¶¯×÷
-		PWM1 = PWM_Motor_Min;
-		PWM2 = PWM_Motor_Min;
-		PWM3 = PWM_Motor_Min;
-		PWM4 = PWM_Motor_Min;
-		return 0;
-	} else {			
-		PWM_Motor_Max = (21000000/freq-1); //ÉèÖÃ×Ô¶¯ÖØ×°ÔØµÄÖµ
-		/* ÔO¶¨ TIM2 TIM3 TIM4 Time Base */
-		TIM_TimeBaseStruct.TIM_Period = (u16)(PWM_Motor_Max);     // ÖØĞÂÉèÖÃÖÜÆÚ
-		TIM_TimeBaseStruct.TIM_Prescaler = (u16)(4-1);             // ³ıîl4 = 21M 
-		TIM_TimeBaseStruct.TIM_ClockDivision = TIM_CKD_DIV1;
-		TIM_TimeBaseStruct.TIM_CounterMode = TIM_CounterMode_Up;		// ÉÏ”µ
-		TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStruct);
-
-		/* †¢„Ó */
-		TIM_ARRPreloadConfig(TIM2, ENABLE);													// ÖÂÄÜ TIM2 ÖØİd¼Ä´æÆ÷ARR
-		TIM_Cmd(TIM2, ENABLE);																			// ÖÂÄÜ TIM2
-		
-	}
-
-	return 1;
-}
-
-static int setMotor1F(float percentage)
+		  - M2_DIR  -> PD15
+ 		  - M2_STOP -> PD13
+		  
+		  - M3_DIR  -> PD10
+ 		  - M3_STOP -> PD11
+		  
+		  - M4_DIR  -> PD8
+ 		  - M4_STOP -> PD9					
+------------------------------------------*/ 
+void MOTOR_DIR_GPIO_Config(void)
 {
-	float Fpercentage;
+	GPIO_InitTypeDef GPIO_InitStructure;
+	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOD, ENABLE);
 	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	Fpercentage = percentage/100.0f;
-	Fpercentage *= PWM_Motor_Max;
-		
-	PWM1 = Fpercentage;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_10 | GPIO_Pin_11 | GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;	
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;   // æ¨æŒ½è¾“å‡º    
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOD, &GPIO_InitStructure);
+	
+	M1_Forward;
+	M2_Forward;
+	M3_Forward;
+	M4_Forward;
+	
+	M1_STOP;
+	M2_STOP;
+	M3_STOP;
+	M4_STOP;	 
 }
-static int setMotor2F(float percentage)
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:PWMè¾“å‡ºåˆå§‹åŒ–				
+------------------------------------------*/
+void PWM_Init(void) 
 {
-	float Fpercentage;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	Fpercentage = percentage/100.0f;
-	Fpercentage *= PWM_Motor_Max;
-		
-	PWM2 = Fpercentage;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
+	PWM_GPIO_Config();
+	PWM_Mode_Config();
+	MOTOR_DIR_GPIO_Config();		 
 }
-static int setMotor3F(float percentage)
-{
-	float Fpercentage;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	Fpercentage = percentage/100.0f;
-	Fpercentage *= PWM_Motor_Max;
-		
-	PWM3 = Fpercentage;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº1æ­£æ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR2_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR2_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M1_Forward(uint16_t val)
+{   	
+	M1_Backward;
+	M1_STOP;
+	TIM_SetCompare2(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
 }
-static int setMotor4F(float percentage)
-{
-	float Fpercentage;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	Fpercentage = percentage/100.0f;
-	Fpercentage *= PWM_Motor_Max;
-		
-	PWM4 = Fpercentage;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº1åæ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR2_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR2_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M1_Backward(uint16_t val)
+{   	
+	M1_Forward;
+	M1_RELEASE;
+	TIM_SetCompare2(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº2æ­£æ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR3_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR3_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M2_Forward(uint16_t val)
+{   
+	M2_Backward;
+	M2_STOP;
+	TIM_SetCompare3(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº2åæ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR3_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR3_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M2_Backward(uint16_t val)
+{   	
+	M2_Forward;
+	M2_RELEASE;
+	TIM_SetCompare3(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº3æ­£æ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR4_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR4_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M3_Forward(uint16_t val)
+{   	
+	M3_Forward;
+	M3_RELEASE;
+	TIM_SetCompare4(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº3åæ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR4_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR4_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M3_Backward(uint16_t val)
+{   
+	M3_Backward;
+	M3_STOP;
+	TIM_SetCompare4(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº4æ­£æ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR1_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR1_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M4_Forward(uint16_t val)
+{   
+	M4_Forward;
+	M4_RELEASE;
+	TIM_SetCompare1(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
+}
+/*------------------------------------------
+ å‡½æ•°åŠŸèƒ½:ç”µæœº4åæ–¹å‘è¿åŠ¨
+ å‡½æ•°å‚æ•°:CCR1_VALå ç©ºæ¯”è®¡æ•°å€¼
+ å‡½æ•°è¯´æ˜:CCR1_VALè¶Šå¤§è½¬é€Ÿè¶Šå¿« 				
+------------------------------------------*/
+void PWM_M4_Backward(uint16_t val)
+{   	
+	M4_Backward;
+	M4_STOP;
+	TIM_SetCompare1(TIM2,val);     //å€¼è¶Šå¤§è½¬é€Ÿè¶Šå¿«
 }
 
-static int setMotor1I(int percentage)
-{
-	int ITemp;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-	
-	ITemp = (PWM_Motor_Max*percentage)/100;
-		
-	PWM1 = ITemp;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
-}
-static int setMotor2I(int percentage)
-{
-	int ITemp;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	ITemp = (PWM_Motor_Max*percentage)/100;
-		
-	PWM2 = ITemp;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
-}
-static int setMotor3I(int percentage)
-{
-	int ITemp;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	ITemp = (PWM_Motor_Max*percentage)/100;
-		
-	PWM3 = ITemp;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-
-	return 1;
-}
-static int setMotor4I(int percentage)
-{
-	int ITemp;
-	
-	//¹æ·¶ÊäÈëµÄÊıÖµ·¶Î§ Ê¹ÓÃÇ°ÇëÏÈ³õÊ¼»¯²¢ÖÁÉÙÉè¶¨Ò»´ÎÆµÂÊ
-	if(percentage < 0)
-		percentage = 0;
-	else if(percentage > 100)
-		percentage = 100;
-
-	ITemp = (PWM_Motor_Max*percentage)/100;
-		
-	PWM4 = ITemp;  //±È½ÏÖµ°´ÊäÈëµÄ°Ù·ÖÊıÇó³ö
-	
-	return 1;
-}

@@ -1,27 +1,59 @@
 #ifndef __pwmRotor4_h__
 #define __pwmRotor4_h__
 
+#include <stm32f10x.h>
 
-#define PWM1  TIM2->CCR1
-#define PWM2  TIM2->CCR2
-#define PWM3  TIM2->CCR4    //猞猁更改 20131111 交换了3和4号电机
-#define PWM4  TIM2->CCR3
+/* 鏂瑰悜1琛ㄧず鍚戝墠,0琛ㄧず鍚戝悗 */
+#define M1_Forward	 	GPIOD->BSRR = GPIO_Pin_14
+#define M1_Backward	 	GPIOD->BRR  = GPIO_Pin_14
 
-typedef struct {
-	int (* initialize)(void);
-	int (* frequency)(int freq, float percentage);
-	int (* setFreq)(int freq);
-	int (* setMotor1F)(float percentage);
-	int (* setMotor2F)(float percentage);
-	int (* setMotor3F)(float percentage);
-	int (* setMotor4F)(float percentage);
-	int (* setMotor1I)(int percentage);
-	int (* setMotor2I)(int percentage);
-	int (* setMotor3I)(int percentage);
-	int (* setMotor4I)(int percentage);
-}PWMROTOR4_T;                                   //声明结构体类型PWMROTOR4_T
+/* 鏂瑰悜1琛ㄧず鍚戝墠,0琛ㄧず鍚戝悗 */
+#define M2_Forward	 	GPIOD->BSRR = GPIO_Pin_15 
+#define M2_Backward	 	GPIOD->BRR  = GPIO_Pin_15
 
-extern PWMROTOR4_T pwmRotor4;                     //PWMROTOR4是类型为PWMROTOR4_T的结构体变量
+/* 鏂瑰悜1琛ㄧず鍚戝墠,0琛ㄧず鍚戝悗 */
+#define M3_Forward	 	GPIOD->BSRR = GPIO_Pin_10
+#define M3_Backward	 	GPIOD->BRR  = GPIO_Pin_10
+
+/* 鏂瑰悜1琛ㄧず鍚戝墠,0琛ㄧず鍚戝悗 */
+#define M4_Forward	 	GPIOD->BSRR = GPIO_Pin_6
+#define M4_Backward	 	GPIOD->BRR  = GPIO_Pin_6
+
+
+
+/* 鐢垫満1鐢ㄩ�氶亾2 */
+#define M1_STOP			GPIOD->BSRR = GPIO_Pin_12
+#define M1_RELEASE      GPIOD->BRR  = GPIO_Pin_12
+
+/* 鐢垫満2鐢ㄩ�氶亾3 */
+#define M2_STOP			GPIOD->BSRR = GPIO_Pin_13
+#define M2_RELEASE      GPIOD->BRR  = GPIO_Pin_13
+
+/* 鐢垫満3 */
+#define M3_STOP			GPIOD->BSRR = GPIO_Pin_11
+#define M3_RELEASE      GPIOD->BRR  = GPIO_Pin_11
+
+/* 鐢垫満4 */
+#define M4_STOP			GPIOD->BSRR = GPIO_Pin_7
+#define M4_RELEASE      GPIOD->BRR  = GPIO_Pin_7
+
+void PWM_GPIO_Config(void);
+
+void PWM_M1_Backward(uint16_t val);
+void PWM_M1_Forward(uint16_t val);
+
+void PWM_M2_Backward(uint16_t val);
+void PWM_M2_Forward(uint16_t val);
+
+void PWM_M3_Backward(uint16_t val);
+void PWM_M3_Forward(uint16_t val);
+
+void PWM_M4_Backward(uint16_t val);
+void PWM_M4_Forward(uint16_t val);
+
+void PWM_GPIO_Config(void);
+void PWM_Init(void);
+void PWM_Mode_Config(void);
 
 
 #endif
